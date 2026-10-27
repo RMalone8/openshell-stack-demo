@@ -1,60 +1,10 @@
-# Creates the OpenClaw sandbox through the OpenShell gateway and keeps
-# `openclaw gateway` running inside it. A Deployment (not a Job) because the
-# in-sandbox process lives as long as the exec session that started it
-# (per davidhayesbc/openclaw-openshell's start.sh); restart => re-attach.
-# Where OpenClaw finds the local model. Edit these two values to match your
-# InferenceService (model id = the --served-model-name = the InferenceService name).
-# Points at the Praxis Service (manifests/praxis.yaml), which forwards to the vLLM model.
-# VLLM_MODEL_ID must equal the InferenceService name (Praxis passes the request body through unchanged).
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: openclaw-model
-data:
-  VLLM_BASE_URL: "http://praxis.openshell-demo.svc.cluster.local:80/v1"
-  VLLM_MODEL_ID: "qwen25-7b"
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: openclaw-launcher
-data:
-  launch.py: |
-    import os, shlex, sys, time
-    from openshell import SandboxClient
-
-    ENDPOINT = os.environ.get("OPENSHELL_ENDPOINT", "openshell.openshell-demo.svc:8080")
-    WS = os.environ.get("OPENSHELL_WORKSPACE", "default")
-    NAME = os.environ.get("SANDBOX_NAME", "openclaw")
-    PORT = os.environ.get("OPENCLAW_PORT", "18789")
-    BASE_URL, MODEL = os.environ["VLLM_BASE_URL"], os.environ["VLLM_MODEL_ID"]
-    if "CHANGE-ME" in BASE_URL + MODEL:
-        sys.exit("Edit the openclaw-model ConfigMap (VLLM_BASE_URL / VLLM_MODEL_ID) first")
-    # No auth on the model endpoint; OpenClaw just needs a non-empty key.
-    env = "VLLM_API_KEY=vllm-local"
-
-    with SandboxClient(ENDPOINT) as c:
-        try:
-            c.get(NAME, workspace=WS)          # method name unverified; falls through to create
-        except Exception:
-            c.create(workspace=WS, name=NAME)  # uses the chart's default sandbox.image (OpenClaw)
-        c.wait_ready(NAME, workspace=WS, timeout_seconds=600)
-        # Point OpenClaw at the in-cluster vLLM (flags per OpenClaw's vLLM provider doc; untested here).
-        ob = c.exec(NAME, ["sh", "-c", f"{env} openclaw onboard --non-interactive --accept-risk --skip-health "
-                   f"--mode local --auth-choice vllm --custom-base-url {shlex.quote(BASE_URL)} "
-                   f"--custom-api-key vllm-local --custom-model-id {shlex.quote(MODEL)}"], workspace=WS)
-        print(ob.stdout); print(ob.stderr, file=sys.stderr)
-        # Foreground exec: keeps the gateway alive while this pod runs.
-        r = c.exec(NAME, ["sh", "-c", f"{env} exec openclaw gateway --port {PORT} --bind lan"], workspace=WS)
-        print(r.stdout); print(r.stderr, file=sys.stderr)
-        sys.exit(r.exit_code if hasattr(r, "exit_code") else 1)   # crash => pod restarts => re-attach
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: openclaw-launcher
 spec:
   replicas: 1
+  strategy: {type: Recreate}
   selector: {matchLabels: {app: openclaw-launcher}}
   template:
     metadata: {labels: {app: openclaw-launcher}}
@@ -62,12 +12,12 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: launcher
-          # Pin to the SDK version matching the gateway chart (0.1.5) once confirmed on PyPI.
           image: registry.access.redhat.com/ubi9/python-312:latest
-          command: ["sh", "-c", "pip install --quiet --target /tmp/pylib openshell && PYTHONPATH=/tmp/pylib exec python /app/launch.py"]
+          command: ["sh", "-c", "pip install --quiet --target /tmp/pylib openshell && PYTHONPATH=/tmp/pylib python /app/launch.py && exec sleep infinity"]
           env:
             - {name: HOME, value: /tmp}
             - {name: OPENSHELL_ENDPOINT, value: "openshell.openshell-demo.svc:8080"}
+            - {name: FORCE_RECREATE, value: "false"}
           envFrom:
             - configMapRef: {name: openclaw-model}
           securityContext:

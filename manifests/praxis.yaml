@@ -20,7 +20,7 @@ data:
         filters:
           - filter: router
             routes:
-              - path: "/v1/chat/completions"
+              - path_prefix: "/"
                 cluster: upstream
 
           - filter: load_balancer
@@ -31,6 +31,7 @@ data:
 
     insecure_options:
       allow_private_endpoints: true
+      allow_private_upstreams: true
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -45,7 +46,6 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: praxis
-          # Tags have no "v" prefix (verified against the GHCR tag list). Pin a digest later.
           image: ghcr.io/praxis-proxy/ai:0.8.0
           args: ["-c", "/etc/praxis/praxis-ai.yaml"]
           ports:

@@ -6,3 +6,13 @@ resources:
   - vllm-gpu-inferenceservice.yaml
   - vllm-gpu-servingruntime.yaml
   - praxis.yaml
+
+configMapGenerator:
+  - name: openclaw-launcher
+    files:
+      - launcher/launch.py
+      - launcher/policy.json
+  - name: openclaw-model
+    literals:
+      - VLLM_BASE_URL=http://praxis.openshell-demo.svc.cluster.local:80/v1
+      - VLLM_MODEL_ID=qwen25-7b

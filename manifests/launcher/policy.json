@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "filesystem": {
+    "include_workdir": true,
+    "read_only": ["/usr", "/lib", "/lib64", "/proc", "/dev/urandom", "/app", "/etc", "/var/log"],
+    "read_write": ["/sandbox", "/tmp", "/dev/null"]
+  },
+  "landlock": {"compatibility": "best_effort"},
+  "process": {},
+  "network_policies": {
+    "praxis": {
+      "name": "praxis",
+      "endpoints": [{
+        "host": "praxis.openshell-demo.svc.cluster.local", "port": 80, "protocol": "rest",
+        "enforcement": "NETWORK_ENFORCEMENT_MODE_ENFORCE", "access": "NETWORK_ACCESS_PRESET_READ_WRITE"
+      }],
+      "binaries": [{"path": "/usr/local/bin/node"}, {"path": "/usr/bin/node"}]
+    }
+  }
+}
