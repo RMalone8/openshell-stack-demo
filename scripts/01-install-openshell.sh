@@ -2,7 +2,7 @@
 # Install the OpenShell gateway chart with the OpenShift SCC overlay + our override.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-NS="${NS:-openshell}"
+NS="${NS:-openshell-demo}"
 VERSION="${OPENSHELL_VERSION:-0.1.5}"   # chart tags track releases; pin it
 CHART="oci://ghcr.io/nvidia/openshell/helm-chart"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT

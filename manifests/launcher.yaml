@@ -4,14 +4,14 @@
 # (per davidhayesbc/openclaw-openshell's start.sh); restart => re-attach.
 # Where OpenClaw finds the local model. Edit these two values to match your
 # InferenceService (model id = the --served-model-name = the InferenceService name).
-# KServe RawDeployment typically exposes http://<isvc>-predictor.<ns>.svc.cluster.local:80
-# (Service port 80 -> container 8080); verify with `oc get svc` / `oc get isvc`.
+# Points at the Praxis Service (manifests/praxis.yaml), which forwards to the vLLM model.
+# VLLM_MODEL_ID must equal the InferenceService name (Praxis passes the request body through unchanged).
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: openclaw-model
 data:
-  VLLM_BASE_URL: "http://qwen25-7b-predictor.openshell.svc.cluster.local:80/v1"
+  VLLM_BASE_URL: "http://praxis.openshell-demo.svc.cluster.local:80/v1"
   VLLM_MODEL_ID: "qwen25-7b"
 ---
 apiVersion: v1
@@ -23,7 +23,7 @@ data:
     import os, shlex, sys, time
     from openshell import SandboxClient
 
-    ENDPOINT = os.environ.get("OPENSHELL_ENDPOINT", "openshell.openshell.svc:8080")
+    ENDPOINT = os.environ.get("OPENSHELL_ENDPOINT", "openshell.openshell-demo.svc:8080")
     WS = os.environ.get("OPENSHELL_WORKSPACE", "default")
     NAME = os.environ.get("SANDBOX_NAME", "openclaw")
     PORT = os.environ.get("OPENCLAW_PORT", "18789")
@@ -64,10 +64,10 @@ spec:
         - name: launcher
           # Pin to the SDK version matching the gateway chart (0.1.5) once confirmed on PyPI.
           image: registry.access.redhat.com/ubi9/python-312:latest
-          command: ["sh", "-c", "pip install --user --quiet openshell && exec python /app/launch.py"]
+          command: ["sh", "-c", "pip install --quiet --target /tmp/pylib openshell && PYTHONPATH=/tmp/pylib exec python /app/launch.py"]
           env:
             - {name: HOME, value: /tmp}
-            - {name: OPENSHELL_ENDPOINT, value: "openshell.openshell.svc:8080"}
+            - {name: OPENSHELL_ENDPOINT, value: "openshell.openshell-demo.svc:8080"}
           envFrom:
             - configMapRef: {name: openclaw-model}
           securityContext:

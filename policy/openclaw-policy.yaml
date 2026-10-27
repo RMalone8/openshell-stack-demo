@@ -17,11 +17,11 @@ landlock:
 process: {}
 
 network_policies:
-  # In-cluster vLLM (KServe RawDeployment Service, see manifests/vllm-gpu-inferenceservice.yaml)
-  vllm:
-    name: vllm
+  # Praxis proxy (manifests/praxis.yaml) in front of the vLLM model
+  praxis:
+    name: praxis
     endpoints:
-      - { host: qwen25-7b-predictor.openshell.svc.cluster.local, port: 80, protocol: rest, enforcement: enforce, access: read-write }
+      - { host: praxis.openshell-demo.svc.cluster.local, port: 80, protocol: rest, enforcement: enforce, access: read-write }
     binaries:
       - { path: /usr/bin/node }
       - { path: /usr/local/bin/node }

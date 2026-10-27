@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: praxis-config
+data:
+  praxis-ai.yaml: |
+    # Health/metrics listener (/healthy, /ready, /metrics). Without this block Praxis
+    # opens no health port. Must not be loopback: the kubelet probes the pod IP.
+    admin:
+      metrics_address: "0.0.0.0:9901"
+
+    listeners:
+      - name: default
+        address: "0.0.0.0:8080"
+        filter_chains:
+          - main
+
+    filter_chains:
+      - name: main
+        filters:
+          - filter: router
+            routes:
+              - path: "/v1/chat/completions"
+                cluster: upstream
+
+          - filter: load_balancer
+            clusters:
+              - name: upstream
+                endpoints:
+                  - "qwen25-7b-predictor.openshell-demo.svc.cluster.local:80"
+
+    insecure_options:
+      allow_private_endpoints: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: praxis
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: praxis}}
+  template:
+    metadata: {labels: {app: praxis}}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: praxis
+          # Tags have no "v" prefix (verified against the GHCR tag list). Pin a digest later.
+          image: ghcr.io/praxis-proxy/ai:0.8.0
+          args: ["-c", "/etc/praxis/praxis-ai.yaml"]
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: admin, containerPort: 9901}
+          readinessProbe:
+            httpGet: {path: /ready, port: 9901}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+          volumeMounts: [{name: config, mountPath: /etc/praxis}]
+      volumes: [{name: config, configMap: {name: praxis-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: praxis
+spec:
+  selector: {app: praxis}
+  ports:
+    - {name: http, port: 80, targetPort: http}

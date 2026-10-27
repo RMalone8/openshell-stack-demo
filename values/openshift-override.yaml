@@ -21,6 +21,16 @@ server:
   # dataStorageClass: gp3-csi
   dataStorageSize: 5Gi
 
+# The launcher (an in-cluster pod) calls the gateway with no credentials. Without
+# this the gateway answers UNAUTHENTICATED "missing authorization header".
+# UNSAFE outside a trusted environment: any pod that can reach Service/openshell
+# can then create sandboxes. Keep the gateway un-exposed (no Route) and restrict
+# ingress with a NetworkPolicy, or switch to OIDC/mTLS for anything shared.
+# (Same setting the chart's ci/values-openshift-e2e.yaml and access-control docs use.)
+gatewayConfig:
+  openshell.gateway.auth:
+    allow_unauthenticated_users: true
+
 # Mirror/pin images here if your cluster can't pull ghcr.io directly.
 # global:
 #   image:
