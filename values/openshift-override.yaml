@@ -1,0 +1,39 @@
+# Override for the NVIDIA OpenShell chart on OpenShift.
+# Layer: helm install ... -f <chart>/ci/values-openshift-scc.yaml -f values/openshift-override.yaml
+# (scripts/01-install-openshell.sh does this for you.)
+#
+# The chart's own OpenShift guide says to keep the restricted posture: no
+# privileged SCC, no added capabilities. The driver reads the namespace's
+# openshift.io/sa.scc.uid-range annotation and runs sandboxes in that range.
+
+# Let restricted-v2 assign UID/fsGroup (same as ci/values-openshift-scc.yaml,
+# repeated so this file also works standalone).
+podSecurityContext:
+  fsGroup: null
+securityContext:
+  runAsUser: null
+
+# Quick-eval transport: plaintext gateway, reached via `oc port-forward`.
+# For anything shared, switch to mTLS/OIDC + Route (see README "Going further").
+server:
+  disableTls: true
+  # Set if your cluster has no default StorageClass, otherwise the gateway PVC stays Pending.
+  # dataStorageClass: gp3-csi
+  dataStorageSize: 5Gi
+
+# Mirror/pin images here if your cluster can't pull ghcr.io directly.
+# global:
+#   image:
+#     registry: ghcr.io/nvidia
+#     tag: ""            # defaults to chart appVersion
+
+# Workload image for sandboxes: the official prebuilt OpenClaw image, so nothing
+# needs to be built. Pin a version tag for anything beyond a demo.
+sandbox:
+  image:
+    repository: ghcr.io/openclaw/openclaw
+    tag: latest
+
+# Optional: run sandboxes under Kata (needs OpenShift sandboxed containers).
+# sandbox:
+#   defaultRuntimeClassName: kata   # NOTE: merge into the sandbox: block above

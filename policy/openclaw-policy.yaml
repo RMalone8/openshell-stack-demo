@@ -1,0 +1,27 @@
+# OpenShell sandbox policy for OpenClaw. Adapted from the format used in
+# NVIDIA/OpenShell-Community sandboxes/base/policy.yaml.
+# Edit the model endpoint block for your provider; everything else is denied.
+version: 1
+
+filesystem_policy:
+  include_workdir: true
+  read_only: [/usr, /lib, /proc, /dev/urandom, /app, /etc, /var/log]
+  read_write: [/sandbox, /tmp, /dev/null]
+
+landlock:
+  compatibility: best_effort
+
+# Don't set run_as_user/group: the OpenClaw image runs as `node` (and OpenShift
+# assigns its own UID); overriding it breaks the supervisor connection
+# (per davidhayesbc/openclaw-openshell's policy notes).
+process: {}
+
+network_policies:
+  # In-cluster vLLM (KServe RawDeployment Service, see manifests/vllm-gpu-inferenceservice.yaml)
+  vllm:
+    name: vllm
+    endpoints:
+      - { host: qwen25-7b-predictor.openshell.svc.cluster.local, port: 80, protocol: rest, enforcement: enforce, access: read-write }
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/local/bin/node }

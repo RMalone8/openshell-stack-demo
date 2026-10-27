@@ -1,0 +1,28 @@
+# ASSUMPTIONS (change freely): model = Qwen2.5-7B-Instruct pulled from Hugging Face,
+# 1 NVIDIA GPU (>=24 GB). The namespace needs egress to huggingface.co for the
+# first download; for air-gapped clusters use a modelcar (oci://) or PVC storageUri.
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: qwen25-7b            # = served model name = VLLM_MODEL_ID in launcher.yaml
+  annotations:
+    # RawDeployment gives a plain Service named <name>-predictor (port 80 -> 8080).
+    serving.kserve.io/deploymentMode: RawDeployment
+    opendatahub.io/dashboard: "true"
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    model:
+      modelFormat:
+        name: vLLM
+      runtime: vllm-gpu-servingruntime
+      storageUri: hf://Qwen/Qwen2.5-7B-Instruct
+      args:
+        # OpenClaw is a tool-using agent: tool calling must be on.
+        - --enable-auto-tool-choice
+        - --tool-call-parser=hermes
+        - --max-model-len=32768
+      resources:
+        requests: {cpu: "4", memory: 24Gi, nvidia.com/gpu: "1"}
+        limits: {cpu: "8", memory: 32Gi, nvidia.com/gpu: "1"}
