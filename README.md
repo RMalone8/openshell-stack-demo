@@ -1,34 +1,53 @@
-# OpenClaw + OpenShell on OpenShift (demo scaffold)
+# OpenClaw in an OpenShell sandbox on OpenShift
 
-**Status: unverified scaffold.** Nothing here has been run against a cluster. No upstream repo combines the two on OpenShift (checked 2026-10-27), so this stitches together the NVIDIA OpenShell chart, its OpenShift guide, and the OpenClaw-in-sandbox pattern from `davidhayesbc/openclaw-openshell`.
+Runs [OpenClaw](https://github.com/openclaw/openclaw) inside an [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) sandbox, talking to a local vLLM model through the [Praxis](https://github.com/praxis-proxy/ai) proxy. No image builds.
 
-## Architecture
-OpenShell's gateway runs as a StatefulSet in `openshell`. It creates sandbox pods through the Agent Sandbox CRD (`agents.x-k8s.io`). **OpenClaw runs inside a sandbox**, as the workload, with an OpenShell policy controlling filesystem and egress. It is not a separate Deployment.
+## How it fits together
+```
+openclaw-launcher (Deployment) --SDK--> OpenShell gateway --Sandbox CR--> Agent Sandbox controller
+                                                                              |
+   vLLM (KServe)  <--  Praxis (proxy)  <--  OpenShell supervisor  <--  sandbox pod: OpenClaw
+```
+- The **gateway** (Helm chart) creates sandboxes when called. Nothing declarative creates one, so the **launcher** calls it.
+- The sandbox runs OpenClaw as its entrypoint, with `ghcr.io/openclaw/openclaw` as the image and a filesystem/egress policy (`manifests/launcher/policy.json`).
+- Egress from the sandbox is limited to **Praxis**, which forwards all paths to vLLM.
+- The launcher stamps the sandbox with a hash of its config. Changing the script, policy or model settings and running `oc apply -k` recreates the sandbox. An unchanged config is left alone.
 
 ## Prerequisites
-- OpenShift >= 4.19 (older RHCOS kernels lack Landlock, so sandbox startup fails)
-- CNI that enforces NetworkPolicy (OVN-Kubernetes does)
-- `oc`, `helm`, `openshell` CLI; cluster-admin for the Agent Sandbox CRDs
-- A registry your cluster can pull from, and a model endpoint (hosted API or in-cluster vLLM)
+- OpenShift >= 4.19 (older kernels lack Landlock), a CNI that enforces NetworkPolicy, `oc`, `helm`, cluster-admin
+- A GPU node for vLLM. The InferenceService assumes one NVIDIA GPU (24 GB or more) and tolerates the `nvidia.com/gpu` taint. KServe / OpenShift AI is required.
+- Egress for: ghcr.io, registry.redhat.io, huggingface.co (model download), PyPI (launcher)
 
-## Steps
+## Install
 ```bash
 oc login ...
-./scripts/00-prereqs.sh            # checks + Agent Sandbox operator/CRDs (v1.0.8)
-./scripts/01-install-openshell.sh  # chart + SCC overlay + override (sandbox.image = ghcr.io/openclaw/openclaw)
-# edit manifests/launcher.yaml ConfigMap openclaw-model (VLLM_BASE_URL, VLLM_MODEL_ID) and fill in vllm-gpu-inferenceservice.yaml
-./scripts/02-apply.sh              # launcher creates the sandbox and starts `openclaw gateway`
+./scripts/00-prereqs.sh            # checks; installs the Agent Sandbox controller + Sandbox CRD (v1.0.8)
+./scripts/01-install-openshell.sh  # OpenShell chart with SCC overlay + values/openshift-override.yaml
+./scripts/02-apply.sh              # vLLM, Praxis, launcher; creates the sandbox
 ```
-No image build: the sandbox uses the official prebuilt `ghcr.io/openclaw/openclaw`. `policy/openclaw-policy.yaml` is not applied automatically yet (see below).
 
-## Open questions / likely rough edges
-- Chart is marked **Experimental** upstream.
-- `manifests/launcher.yaml` uses SDK calls documented upstream (`create`, `wait_ready`, `exec`), but the existence check (`get`), the exec result fields, and `pip install openshell` at pod start are unverified. The pod needs PyPI egress.
-- Whether the official OpenClaw image works as an OpenShell sandbox workload (it runs as `node`; OpenShift assigns another UID) is untested.
-- Applying `policy/openclaw-policy.yaml` declaratively isn't wired up; use `openshell policy set` or find the SDK/gateway-default equivalent. Until then OpenShell's default policy applies.
-- OpenClaw's UI on :18789 is not exposed (no Route/Service): the sandbox pod is gateway-managed. Use `openshell` port forwarding for now.
-- Sandbox startup fails if the runtime profile blocks nested seccomp user-notification or Landlock; if so, check the cluster's seccomp/SCC profile.
-- OpenClaw's own UI/gateway on :18789 is reached via `openshell sandbox ssh-config` + SSH tunnel (see the hayesbc scripts), not an OpenShift Route.
+## Use it
+```bash
+oc -n openshell-demo port-forward pod/default--openclaw 18789:18789   # then open http://127.0.0.1:18789
+# gateway token (prints a secret):
+oc -n openshell-demo exec default--openclaw -c agent -- \
+  sh -c "sed -n 's/.*\"token\": *\"\([^\"]*\)\".*/\1/p' /sandbox/.openclaw/openclaw.json | head -1"
+```
+The sandbox pod is `<workspace>--<name>` (`default--openclaw`). Launcher logs: `oc -n openshell-demo logs -f deploy/openclaw-launcher`.
 
-## Going further
-TLS/Route/OIDC options (BackendTLSPolicy on 4.22+, passthrough Route + cert-manager) are in the upstream guide: docs/kubernetes/openshift.mdx in NVIDIA/OpenShell.
+## Configure
+| What | Where |
+|---|---|
+| Model name and Praxis URL | `configMapGenerator` in `manifests/kustomization.yaml` (model ID = InferenceService name) |
+| Model, GPU, context length | `manifests/vllm-gpu-inferenceservice.yaml` |
+| Sandbox filesystem / egress policy | `manifests/launcher/policy.json` |
+| Sandbox command, env, recreate logic | `manifests/launcher/launch.py` |
+| Praxis routing | `manifests/praxis.yaml` |
+| Gateway chart values, sandbox image | `values/openshift-override.yaml` |
+
+The namespace is `openshell-demo`. It is set in `manifests/kustomization.yaml` and the scripts, and also appears in service hostnames in `launch.py`, `kustomization.yaml`, `praxis.yaml` and `policy.json`. Change all of them together. `policy/openclaw-policy.yaml` is a reference copy only.
+
+## Known gaps
+- No Route for the UI. OpenShell has service forwarding (a gateway-managed URL), but it needs a wildcard Route that preserves the `Host` header, which is not set up here.
+- The chart is marked experimental upstream. Kata (`sandbox.defaultRuntimeClassName`) is an optional extra and is untested.
+- Old generated ConfigMaps are not pruned.
