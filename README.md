@@ -35,6 +35,13 @@ oc -n openshell-demo exec default--openclaw -c agent -- \
 ```
 The sandbox pod is `<workspace>--<name>` (`default--openclaw`). Launcher logs: `oc -n openshell-demo logs -f deploy/openclaw-launcher`.
 
+## Tear down
+```bash
+./scripts/99-teardown.sh --dry-run   # show what would be deleted
+./scripts/99-teardown.sh             # asks first; --yes skips the prompt
+```
+`oc delete -k manifests` alone leaves the gateway and sandbox running: the sandbox and supervisor are created by the gateway at runtime, and the gateway comes from Helm. The script removes manifests, then sandboxes, then the gateway release and its data PVC. Add `--delete-namespace` to drop the namespace, or `--agent-sandbox` to remove the cluster-wide Agent Sandbox controller and CRD (affects every namespace).
+
 ## Configure
 | What | Where |
 |---|---|
