@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 NS="${NS:-openshell-demo}"
-VERSION="${OPENSHELL_VERSION:-0.1.5}"   # chart tags track releases; pin it
+VERSION="${OPENSHELL_VERSION:-0.1.6}"   # chart tags track releases; pin it
 CHART="oci://ghcr.io/nvidia/openshell/helm-chart"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 # The SCC overlay ships in the chart repo's ci/ dir, not in the packaged chart.
