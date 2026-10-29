@@ -21,7 +21,7 @@ server:
   # dataStorageClass: gp3-csi
   dataStorageSize: 5Gi
 
-# The launcher (an in-cluster pod) calls the gateway with no credentials. Without
+# The openshell CLI (through a port-forward) calls the gateway with no credentials. Without
 # this the gateway answers UNAUTHENTICATED "missing authorization header".
 # UNSAFE outside a trusted environment: any pod that can reach Service/openshell
 # can then create sandboxes. Keep the gateway un-exposed (no Route) and restrict
