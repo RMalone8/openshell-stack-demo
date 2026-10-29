@@ -40,6 +40,8 @@ The model is a self-hosted vLLM server (a KServe InferenceService). OpenClaw rea
 - Egress for: ghcr.io, registry.redhat.io, huggingface.co (model download)
 
 ## Install
+
+The Sandbox CRD and controller come from the [Agent Sandbox](https://github.com/kubernetes-sigs/agent-sandbox) project. `00-prereqs.sh` applies [`sandbox.yaml` from release v1.0.8](https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.8/sandbox.yaml) (cluster-wide, so it needs cluster-admin).
 ```bash
 oc login ...
 ./scripts/00-prereqs.sh            # checks; installs the Agent Sandbox controller + Sandbox CRD (v1.0.8)
