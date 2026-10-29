@@ -4,9 +4,30 @@ Runs [OpenClaw](https://github.com/openclaw/openclaw) inside an [NVIDIA OpenShel
 
 ## How it fits together
 ```
-openshell CLI (your laptop) --port-forward--> OpenShell gateway --Sandbox CR--> Agent Sandbox controller
-                                                                              |
-   vLLM (KServe)  <--  Praxis (proxy)  <--  OpenShell supervisor  <--  sandbox pod: OpenClaw
++----------------------+                OpenShift namespace: openshell-demo
+| LOCAL MACHINE        |
+|                      |
+| +------------------+ |        port-forward :8080                 +--------------------+
+| | openshell CLI    |-------------------------------------------->| OpenShell gateway  |
+| +------------------+ |                                           | (Helm, SQLite PVC) |
+|                      |                                           +--------------------+
+|                      |                                   creates Sandbox   | creates pod + session
+|                      |                            +------------------------+--------------------------+
+|                      |                            v                                                   v
+| +------------------+ | port-forward   +-----------------------+                            +---------------------+
+| | browser          |----------------->| sandbox pod: OpenClaw |<---- opens TLS channel ----| supervisor pod:     |
+| | 127.0.0.1:18789  | | :18789         | /sandbox on its PVC   |----- egress requests ----->| enforces the policy |
+| +------------------+ |                | (made by the Agent    |                            | and proxies all     |
+|                      |                | Sandbox controller)   |                            | egress              |
+|                      |                +-----------------------+                            +---------------------+
++----------------------+                                                                                |
+                                                                          +----------------------+------+
+                                                                          v                      v
+                                                                  +----------------+    +------------------+
+                                                                  | Praxis -> vLLM |    | api.github.com   |
+                                                                  | (KServe, GPU)  |    | read-only (curl) |
+                                                                  +----------------+    +------------------+
+                                                                            everything else: denied
 ```
 - The **gateway** (Helm chart) creates sandboxes when called. Nothing declarative creates one, so you create it with the `openshell` CLI through a port-forward (`scripts/03-create-sandbox.sh`).
 - The sandbox runs OpenClaw as its entrypoint, with `ghcr.io/openclaw/openclaw` as the image and a filesystem/egress policy (`sandbox/policy.yaml`). Egress is limited to **Praxis** and read-only requests to `api.github.com` from `curl` (see "What the sandbox policy allows").
@@ -57,6 +78,9 @@ Re-run `./scripts/03-create-sandbox.sh` after a delete. It does nothing if the s
 
 ## What the sandbox policy allows
 `sandbox/policy.yaml` is the whole policy. Anything it doesn't list is denied.
+
+- **Network:** `node` (OpenClaw) can reach Praxis. `curl` can make read-only requests (`GET`, `HEAD`, `OPTIONS`) to `api.github.com`. Everything else is blocked, including `github.com`, so `git clone` doesn't work.
+- **Filesystem:** `/sandbox` (the persistent PVC) and `/tmp` are writable. System paths such as `/usr`, `/etc` and `/app` are read-only.
 
 Network rules can be changed on a running sandbox: `openshell policy set openclaw --policy sandbox/policy.yaml`.
 
