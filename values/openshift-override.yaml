@@ -37,13 +37,9 @@ gatewayConfig:
 #     registry: ghcr.io/nvidia
 #     tag: ""            # defaults to chart appVersion
 
-# Workload image for sandboxes: the official prebuilt OpenClaw image, so nothing
-# needs to be built. Pin a version tag for anything beyond a demo.
-sandbox:
-  image:
-    repository: ghcr.io/openclaw/openclaw
-    tag: latest
+# The sandbox workload image (ghcr.io/openclaw/openclaw) is passed with --from in
+# scripts/03-create-sandbox.sh, so the chart's default sandbox image is left alone.
 
 # Optional: run sandboxes under Kata (needs OpenShift sandboxed containers).
 # sandbox:
-#   defaultRuntimeClassName: kata   # NOTE: merge into the sandbox: block above
+#   defaultRuntimeClassName: kata
