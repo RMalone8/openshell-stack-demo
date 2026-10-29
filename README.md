@@ -87,8 +87,6 @@ Network rules can be changed on a running sandbox: `openshell policy set opencla
 The filesystem, Landlock and process sections cannot lose paths or change on a live sandbox.
 
 
-The namespace is `openshell-demo`. It is set in `manifests/kustomization.yaml` and the scripts, and also appears in service hostnames in `03-create-sandbox.sh`, `praxis.yaml` and `sandbox/policy.yaml`. Change all of them together.
-
 ## Known gaps
 - The chart is marked experimental upstream. Kata (`sandbox.defaultRuntimeClassName`) is an optional extra and is untested.
 - The gateway runs over plaintext HTTP with unauthenticated access, reachable only through a port-forward. Add OIDC/mTLS and a Route before sharing it.
